@@ -1,0 +1,123 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width">
+<title>Web Steelpan</title>
+</head><body>
+<h1>Web Steelpan</h1>
+
+<div id="selkinds"></div>
+<button id=btnstart>START</button>
+<button id=btnstop>STOP</button>
+<br>
+<span class=label>VOL</span><input type=range id=range min=0 max=1 value=0.3 step=0.01><br>
+<span class=label>SAMPLE</span><span id=spantones></span><br>
+<hr>
+lib: <a href=https://github.com/code4fukui/audioworklet-test/>AudioWorklet-test</a><br>
+<a href=https://github.com/code4fukui/web-steelpan/>src on GitHub</a><br>
+
+<script type="module">
+import { SamplesNode } from "./SamplesNode.js";
+import { initDeviceSelects } from "https://code4fukui.github.io/audioworklet-test/initDeviceSelects.js";
+import { setGamepadHandler } from "./Gamepad.js";
+
+const kinds = await initDeviceSelects(selkinds, "audiooutput");
+
+let context = null;
+
+const start = async () => {
+  if (context) {
+    await stop();
+  }
+  const sampleRate = 48000; // mac default
+  const sinkId = kinds["audiooutput"].value;
+  context = new AudioContext({ sampleRate, sinkId });
+  console.log(context);
+
+  const node = await SamplesNode.create(context);
+  const fns = [
+    "https://code4fukui.github.io/sound-cc0/steel1.wav",
+  ];
+  node.setWaveFiles(fns);
+
+  node.connect(context.destination);
+
+  range.oninput = () => node.setVolume(range.value);
+  range.oninput();
+  
+  //  1 3   6 8 A
+  // 0 2 4 5 7 9 B C
+  const tones = [0, 2, 4, 5, 7, 9, 11, 12];
+  const tonename = "CDEFGABC";
+  const play = (i, half = false) => {
+    if (i < 0 || i > 7) {
+      return;
+    }
+    const tone = 12 - tones[i] - (half ? 1 : 0);
+    const basefreq = 440;
+    const freq = 440 * Math.pow(2, tone / 12);
+    const pitch = basefreq / freq;
+    node.noteOn(0, 1, pitch, 0);
+  }
+  for (let i = 0; i < 8; i++) {
+    const btn = document.createElement("button");
+    btn.textContent = tonename[i] + `(${i + 1})`; //"TONE" + (i + 1);
+    spantones.appendChild(btn);
+    btn.onclick = () => play(i);
+  }
+  // keyboard
+  document.body.onkeydown = (e) => {
+    const n = parseInt(e.key) - 1;
+    if (!isNaN(n)) play(n);
+  };
+  // gamepad
+  const gpmap = [5, 4, 0, 3, 2, 7, 9, 6];
+  const gpmaphalf = 1;
+  let halfmode = false;
+  setGamepadHandler((btnid, pressed, gamepadid) => {
+    //console.log("gamepad", btnid, pressed, gamepadid);
+    if (pressed) {
+      if (btnid == gpmaphalf) {
+        halfmode = true;
+      }
+      const idx = gpmap.indexOf(btnid);
+      if (idx >= 0) {
+        play(idx, halfmode);
+      }
+    } else {
+      if (btnid == gpmaphalf) {
+        halfmode = false;
+      }
+    }
+  });
+};
+const stop = async () => {
+  if (!context) return;
+  await context.close();
+  context = null;
+};
+
+btnstart.onclick = start;
+btnstop.onclick = stop;
+
+// gampead Access Controler
+
+</script>
+
+<style>
+body {
+  margin: 1.5em;
+}
+.label {
+  display: inline-block;
+  width: 6em;
+}
+button {
+  margin-bottom: 1em;
+}
+input {
+  width: 80vw;
+}
+a {
+  color: gray !important;
+}
+</style>
+</body>
+</html>
